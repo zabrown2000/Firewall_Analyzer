@@ -1,0 +1,43 @@
+# rules.v4
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+
+-A INPUT -p tcp --syn --dport 80 -m connlimit --connlimit-above 20 -j REJECT
+
+# Insecure HTTP methods protection
+#-A INPUT -p tcp --dport 80 -m multiport --dports 80,443 -m conntrack --ctstate NEW -m recent --name BAD_HTTP>
+-A INPUT -p tcp --dport 80 -m multiport --dports 80,443 -m conntrack --ctstate NEW -m recent --name BAD_HTTP --set
+#-A INPUT -p tcp --dport 80 -m multiport --dports 80,443 -m conntrack --ctstate NEW -m recent --name BAD_HTTP>
+-A INPUT -p tcp --dport 80 -m string --string "X-HTTP-Method-Override: PUT" --algo bm --to 65535 -j REJECT
+
+# Clickjacking protection
+-A INPUT -p tcp --dport 80 -m string --string "X-Frame-Options: DENY" --algo bm --to 65535 -j REJECT
+-A INPUT -p tcp --dport 80 -m string --string "Referer: http://evil.com/malicious-page"  --algo bm --to 65535 -j REJECT
+
+# MIME sniffing protection
+-A INPUT -p tcp --dport 80 -m string --string "X-Content-Type-Options: nosniff" --algo bm --to 65535 -j REJECT
+-A INPUT -p tcp --dport 80 -m string --string "Content-Type: text/html" --algo bm --to 65535 -j REJECT
+
+# Cross-domain request protection
+-A INPUT -p tcp --dport 80 -m string --string "Content-Security-Policy: frame-ancestors 'self'" --algo bm -j REJECT
+-A INPUT -p tcp --dport 80 -m string --string "Origin: http://evil.com" --algo bm --to 65535 -j REJECT
+
+# DDoS protection
+-A INPUT -p tcp --syn --dport 80 -m connlimit --connlimit-above 10 --connlimit-mask 32 -j REJECT
+
+-A INPUT -p tcp --syn --dport 80 -m connlimit --connlimit-above 20 -j REJECT
+-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+-A INPUT -p icmp --icmp-type 8 -m limit --limit 5/second --limit-burst 10 -j ACCEPT
+-A INPUT -p icmp --icmp-type 0 -m limit --limit 5/second --limit-burst 10 -j ACCEPT
+-A INPUT -p icmp -j REJECT
+
+
+#allowing incoming http traffic on port 80
+-A INPUT -p tcp --dport 80 -m conntrack --ctstate NEW -j ACCEPT
+
+# allowing outgoing http traffic on port 80
+-A OUTPUT -p tcp --dport 80 -m conntrack --ctstate NEW -j ACCEPT
+
+COMMIT
